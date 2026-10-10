@@ -69,3 +69,15 @@ tests/Booklink.Tests       тесты бизнес-правил
 pg_dump -h localhost -U postgres -Fc booklink > booklink.dump
 pg_restore -h localhost -U postgres --clean --create -d postgres booklink.dump
 ```
+
+## CI/CD
+
+`.github/workflows/ci-cd.yml`:
+- **CI** (push в `main`, теги `v*`, pull request): сборка, тесты, проверка что миграции соответствуют модели, smoke-тест на PostgreSQL 17.
+- **CD** (push в `main` и теги `v*`, после успешного CI): Docker-образ в `ghcr.io/techlib-team/techlib-backend` с тегами `latest` (main), `sha-<коммит>`, `<версия>` (тег `v1.0.0` → `1.0.0`).
+
+Развёртывание на сервере:
+```bash
+cp .env.example .env   # заполнить
+docker compose pull && docker compose up -d
+```

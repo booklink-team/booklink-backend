@@ -1,0 +1,27 @@
+# Запуск сервера и БД: задайте переменные в .env (см. .env.example), затем `docker compose up -d`.
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?}
+      POSTGRES_DB: booklink
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: pg_isready -U postgres
+      interval: 5s
+      retries: 10
+
+  api:
+    image: ghcr.io/techlib-team/techlib-backend:${API_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      ConnectionStrings__Default: Host=db;Database=booklink;Username=postgres;Password=${DB_PASSWORD}
+      Jwt__Key: ${JWT_KEY:?}
+      Seed__Password: ${SEED_PASSWORD:-}
+    ports: ["8080:8080"]
+
+volumes:
+  pgdata:

@@ -1,0 +1,6 @@
+**/bin
+**/obj
+.git
+.github
+tests
+**/appsettings.Development.json
