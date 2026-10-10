@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Booklink.Application\Booklink.Application.csproj" />
+    <ProjectReference Include="..\..\src\Booklink.Infrastructure\Booklink.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
