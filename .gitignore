@@ -427,3 +427,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Локальная конфигурация с секретами
+src/Booklink.Api/appsettings.Development.json
