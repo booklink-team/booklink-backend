@@ -62,6 +62,8 @@ tests/Booklink.Tests       тесты бизнес-правил
 - Повторы безопасны: повторная выдача/возврат возвращают тот же результат, повторное бронирование/продление отклоняются правилами.
 - Истечение броней — фоновая задача раз в 30 с + проверка при каждой операции.
 - Пароли — PBKDF2 (ASP.NET Core Identity `PasswordHasher`); токены и пароли не пишутся в журнал.
+- Вход ограничен 10 попытками в минуту с одного IP (429).
+- Проверка доступа и гонок на живом сервере: `scripts/security-check.sh <url> <пароль демо-учёток>` (запускается в CI).
 
 ## Резервное копирование
 
@@ -73,10 +75,34 @@ pg_restore -h localhost -U postgres --clean --create -d postgres booklink.dump
 ## CI/CD
 
 `.github/workflows/ci-cd.yml`:
-- **CI** (push в `main`, теги `v*`, pull request): сборка, тесты, проверка что миграции соответствуют модели, smoke-тест на PostgreSQL 17.
-- **CD** (push в `main` и теги `v*`, после успешного CI): Docker-образ в `ghcr.io/techlib-team/techlib-backend` с тегами `latest` (main), `sha-<коммит>`, `<версия>` (тег `v1.0.0` → `1.0.0`).
+- **CI** (push в `main`, теги `v*`, pull request): сборка, тесты, проверка что миграции соответствуют модели, smoke-тест и `scripts/security-check.sh` на PostgreSQL 17.
+- **Образ** (push в `main` и теги `v*`, после успешного CI): `ghcr.io/<владелец>/<репозиторий>` с тегами `latest` (main), `sha-<коммит>`, `<версия>` (тег `v1.0.0` → `1.0.0`).
+- **Деплой** (push в `main` или ручной запуск): по SSH создаёт папку проекта на сервере, копирует `compose.yaml`, записывает `.env`, ставит Docker (если его нет) и запускает новую версию.
 
-Развёртывание на сервере:
+### Настройка деплоя
+
+GitHub → репозиторий → Settings → Secrets and variables → Actions.
+
+Вкладка **Variables**:
+
+| Имя | Значение |
+|---|---|
+| `DEPLOY_HOST` | IP сервера |
+| `DEPLOY_USER` | пользователь SSH (не задан — `root`) |
+| `DEPLOY_PATH` | папка проекта на сервере, например `/opt/booklink` (создаётся, если нет) |
+
+Вкладка **Secrets**:
+
+| Имя | Значение |
+|---|---|
+| `DEPLOY_PASSWORD` | пароль SSH |
+| `DB_PASSWORD` | пароль PostgreSQL |
+| `JWT_KEY` | случайная строка не короче 32 символов (`openssl rand -base64 48`) |
+| `SEED_PASSWORD` | пароль демо-учёток; пусто — без наполнения |
+
+Пока `DEPLOY_HOST` не задан, деплой пропускается. После настройки: Actions → CI/CD → Run workflow (ветка `main`) или любой push в `main`. API: `http://<IP>:8080/swagger`.
+
+Вручную на сервере:
 ```bash
 cp .env.example .env   # заполнить
 docker compose pull && docker compose up -d

@@ -13,7 +13,7 @@ services:
       retries: 10
 
   api:
-    image: ghcr.io/techlib-team/techlib-backend:${API_TAG:-latest}
+    image: ${API_IMAGE:-ghcr.io/booklink-team/booklink-backend}:${API_TAG:-latest}
     restart: unless-stopped
     depends_on:
       db: { condition: service_healthy }

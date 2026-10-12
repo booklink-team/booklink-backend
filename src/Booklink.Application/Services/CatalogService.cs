@@ -8,7 +8,7 @@ public class CatalogService(IAppDbContext db)
 {
     public async Task<PagedResult<BookListItemDto>> SearchAsync(string? search, int page, CancellationToken ct)
     {
-        page = Math.Max(page, 1);
+        page = Math.Clamp(page, 1, 100_000); // без переполнения (page - 1) * PageSize
         var query = db.Books.AsQueryable();
         if (!string.IsNullOrWhiteSpace(search))
         {

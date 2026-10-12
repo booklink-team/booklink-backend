@@ -5,6 +5,7 @@ on:
     branches: [main]
     tags: ["v*"]
   pull_request:
+  workflow_dispatch: # ручной перезапуск деплоя: Actions → CI/CD → Run workflow
 
 jobs:
   test:
@@ -44,10 +45,11 @@ jobs:
           for i in $(seq 1 60); do curl -sf localhost:8080/swagger/v1/swagger.json -o /dev/null && break; sleep 1; done
           curl -sf localhost:8080/api/auth/login -H 'Content-Type: application/json' \
             -d '{"login":"student1","password":"ci"}' | grep -q accessToken
+          scripts/security-check.sh http://localhost:8080 ci
 
   docker:
     needs: test
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -66,7 +68,7 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=sha
+            type=sha,format=long
             type=semver,pattern={{version}}
       - uses: docker/build-push-action@v6
         with:
@@ -76,3 +78,75 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Деплой на сервер по SSH. Настройка — README, раздел «Деплой».
+  # Пока не задана переменная DEPLOY_HOST, шаг пропускается.
+  deploy:
+    needs: docker
+    if: github.ref == 'refs/heads/main' && vars.DEPLOY_HOST != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    concurrency: deploy
+    env:
+      SSH_HOST: ${{ vars.DEPLOY_HOST }}
+      SSH_USER: ${{ vars.DEPLOY_USER || 'root' }}
+      SSH_PASS: ${{ secrets.DEPLOY_PASSWORD }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Создать папку проекта на сервере
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          password: ${{ env.SSH_PASS }}
+          envs: DEPLOY_PATH
+          script: mkdir -p "$DEPLOY_PATH"
+
+      - name: Скопировать compose.yaml
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          password: ${{ env.SSH_PASS }}
+          source: compose.yaml
+          target: ${{ env.DEPLOY_PATH }}
+
+      - name: Запустить новую версию
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          API_IMAGE: ghcr.io/${{ github.repository }}
+          API_TAG: sha-${{ github.sha }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          JWT_KEY: ${{ secrets.JWT_KEY }}
+          SEED_PASSWORD: ${{ secrets.SEED_PASSWORD }}
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          password: ${{ env.SSH_PASS }}
+          envs: DEPLOY_PATH,GHCR_USER,GHCR_TOKEN,API_IMAGE,API_TAG,DB_PASSWORD,JWT_KEY,SEED_PASSWORD
+          command_timeout: 20m
+          script: |
+            set -e
+            command -v docker >/dev/null || curl -fsSL https://get.docker.com | sh
+            cd "$DEPLOY_PATH"
+            umask 077
+            {
+              echo "API_IMAGE=$(echo "$API_IMAGE" | tr '[:upper:]' '[:lower:]')"
+              echo "API_TAG=$API_TAG"
+              echo "DB_PASSWORD=$DB_PASSWORD"
+              echo "JWT_KEY=$JWT_KEY"
+              echo "SEED_PASSWORD=$SEED_PASSWORD"
+            } > .env
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            docker compose pull api
+            docker compose up -d --remove-orphans
+            docker logout ghcr.io
+            docker image prune -f
+            for i in $(seq 60); do curl -sf localhost:8080/swagger/v1/swagger.json -o /dev/null && exit 0; sleep 2; done
+            docker compose logs --tail 100 api; exit 1

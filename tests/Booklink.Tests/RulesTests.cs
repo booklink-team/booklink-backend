@@ -83,6 +83,34 @@ public class RulesTests
     }
 
     [Fact]
+    public async Task Foreign_data_is_not_accessible()
+    {
+        var (db, clock) = Setup();
+        var reservations = new ReservationService(db, clock);
+        var loans = new LoanService(db, clock);
+        var lists = new ReadingListService(db, clock);
+
+        var r = await reservations.CreateAsync(1, 1, default);
+        var loan = await loans.IssueAsync(r.Id, default);
+        var r2 = await reservations.CreateAsync(1, 2, default);
+        var list = await lists.CreateAsync(1, "Моё", default);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => reservations.CancelAsync(2, r2.Id, default));
+        await Assert.ThrowsAsync<NotFoundException>(() => loans.RenewAsync(2, loan.Id, default));
+        await Assert.ThrowsAsync<NotFoundException>(() => lists.RenameAsync(2, list.Id, "Чужое", default));
+        await Assert.ThrowsAsync<NotFoundException>(() => lists.DeleteAsync(2, list.Id, default));
+        await Assert.ThrowsAsync<NotFoundException>(() => lists.AddBookAsync(2, list.Id, 3, default));
+        Assert.Empty(await reservations.GetMineAsync(2, default));
+        Assert.Empty(await loans.GetMineAsync(2, default));
+        Assert.Empty(await lists.GetMineAsync(2, default));
+
+        // Ничего не изменилось.
+        Assert.Equal(ReservationStatus.Active, db.Reservations.Single(x => x.Id == r2.Id).Status);
+        Assert.Equal(0, db.Loans.Single().RenewalCount);
+        Assert.Equal("Моё", db.ReadingLists.Single().Name);
+    }
+
+    [Fact]
     public async Task Reading_list_names()
     {
         var (db, clock) = Setup();

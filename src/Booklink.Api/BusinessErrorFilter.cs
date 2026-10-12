@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 
 namespace Booklink.Api;
@@ -21,7 +22,9 @@ public class BusinessErrorFilter(ProblemDetailsFactory problems) : IExceptionFil
             DomainException { Code: "invalid_list_name" } d => (400, d.Code, d.Message),
             DomainException d => (409, d.Code, d.Message),
             NotFoundException n => (404, "not_found", n.Message),
-            DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } } =>
+            // Гонка параллельных запросов: дубль, удалённая связанная запись или исчерпаны повторы транзакции.
+            DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation or PostgresErrorCodes.ForeignKeyViolation } }
+                or RetryLimitExceededException =>
                 (409, "conflict", "Операция конфликтует с текущим состоянием. Обновите данные и повторите."),
             _ => (0, "", ""),
         };
