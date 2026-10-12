@@ -148,5 +148,5 @@ jobs:
             docker compose up -d --remove-orphans
             docker logout ghcr.io
             docker image prune -f
-            for i in $(seq 60); do curl -sf localhost:8080/swagger/v1/swagger.json -o /dev/null && exit 0; sleep 2; done
+            for i in $(seq 60); do curl -sf localhost:6776/swagger/v1/swagger.json -o /dev/null && exit 0; sleep 2; done
             docker compose logs --tail 100 api; exit 1

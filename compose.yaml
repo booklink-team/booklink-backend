@@ -21,7 +21,7 @@ services:
       ConnectionStrings__Default: Host=db;Database=booklink;Username=postgres;Password=${DB_PASSWORD}
       Jwt__Key: ${JWT_KEY:?}
       Seed__Password: ${SEED_PASSWORD:-}
-    ports: ["8080:8080"]
+    ports: ["6776:8080"]
 
 volumes:
   pgdata:

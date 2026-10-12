@@ -100,7 +100,7 @@ GitHub → репозиторий → Settings → Secrets and variables → Act
 | `JWT_KEY` | случайная строка не короче 32 символов (`openssl rand -base64 48`) |
 | `SEED_PASSWORD` | пароль демо-учёток; пусто — без наполнения |
 
-Пока `DEPLOY_HOST` не задан, деплой пропускается. После настройки: Actions → CI/CD → Run workflow (ветка `main`) или любой push в `main`. API: `http://<IP>:8080/swagger`.
+Пока `DEPLOY_HOST` не задан, деплой пропускается. После настройки: Actions → CI/CD → Run workflow (ветка `main`) или любой push в `main`. API: `http://<IP>:6776/swagger`.
 
 Вручную на сервере:
 ```bash
